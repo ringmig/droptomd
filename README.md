@@ -17,7 +17,7 @@ Requires macOS 14 or later on Apple Silicon.
 
 ## Formats
 
-PDF, Word, PowerPoint, Excel (xlsx, xls), HTML, EPUB, Jupyter, Outlook msg, ZIP, CSV, JSON, XML, RSS, text, YAML, audio (mp3, wav, m4a), plus Mac formats: Pages, Numbers, Keynote (needs the matching app), RTF, RTFD, DOC, ODT, webarchive, and images (PNG, JPG, HEIC, TIFF, GIF, BMP, WebP) through on-device text recognition.
+PDF, Word, PowerPoint, Excel (xlsx, xls), HTML, EPUB, Jupyter, Outlook msg, ZIP, CSV, JSON, XML, RSS, text, YAML, audio (mp3, wav, m4a), plus Mac formats: Pages, Numbers, Keynote (needs the app installed and permission granted when prompted during conversion), RTF, RTFD, DOC, ODT, webarchive, and images (PNG, JPG, HEIC, TIFF, GIF, BMP, WebP) through on-device text recognition.
 
 ## Build
 
