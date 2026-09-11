@@ -194,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
 }
 
-// Headless check: `MarkdownDrop file...` converts without the window.
+// Headless check: `DropToMD file...` converts without the window.
 let paths = CommandLine.arguments.dropFirst().filter { FileManager.default.fileExists(atPath: $0) }
 if !paths.isEmpty {
     for p in paths {
