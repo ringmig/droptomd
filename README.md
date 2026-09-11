@@ -1,5 +1,7 @@
 # Drop to MD
 
+![Drop to MD](screenshot.png)
+
 A small floating Mac window. Drop one or more files on it and each one is converted to Markdown, saved next to the original (or in Downloads if that folder is read-only).
 
 ## Install
