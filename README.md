@@ -34,3 +34,5 @@ Needs Xcode command line tools and [uv](https://github.com/astral-sh/uv). Produc
 - Pages, Numbers and Keynote: iWork files are exported to Office formats through their own app
 - [Lucide](https://lucide.dev): the `file-plus-corner`, `file-check` and `x` icons
 - [shift-labs-ai/markit](https://github.com/shift-labs-ai/markit): evaluated as a faster Rust engine; not used, since it covers fewer formats
+
+License notices for bundled and embedded third-party work: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
