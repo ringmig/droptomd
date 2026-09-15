@@ -1,6 +1,8 @@
 name: Windows exe
 
 on:
+  push:
+    branches: [windows-exe]
   pull_request:
     paths: ["windows/**", "tests/**", ".github/workflows/windows.yml"]
   workflow_dispatch:
@@ -24,7 +26,7 @@ jobs:
           python-version: "3.12"
           architecture: x64
 
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: C:\nuitka-cache
           key: nuitka-${{ hashFiles('windows/requirements.txt') }}-${{ github.run_id }}
@@ -39,15 +41,20 @@ jobs:
           $tag = "${{ github.event.release.tag_name }}"
           $version = if ($tag) { $tag.TrimStart("v") } else { "0.0.${{ github.run_number }}" }
           python -c "from PIL import Image; Image.open('windows/assets/app.png').save('build-app.ico', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (256, 256)])"
-          $tkdnd = python -c "import tkinterdnd2, os; print(os.path.join(os.path.dirname(tkinterdnd2.__file__), 'tkdnd', 'win-x64'))"
           python -m nuitka --onefile --assume-yes-for-downloads --enable-plugin=tk-inter `
             --include-package-data=magika `
-            "--include-data-files=$tkdnd\*=tkinterdnd2/tkdnd/win-x64/" `
+            --include-package-data=tkinterdnd2 `
             --include-data-dir=windows/assets=assets `
             "--onefile-tempdir-spec={CACHE_DIR}/DropToMD/{VERSION}" `
             "--product-name=Drop to MD" "--product-version=$version" `
             --windows-console-mode=attach --windows-icon-from-ico=build-app.ico `
             --output-dir=build --output-filename=DropToMD.exe windows/droptomd.py
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: C:\nuitka-cache
+          key: nuitka-${{ hashFiles('windows/requirements.txt') }}-${{ github.run_id }}
 
       - name: Test
         shell: pwsh
