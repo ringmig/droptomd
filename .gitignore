@@ -3,3 +3,5 @@ dist/
 *.iconset/
 .DS_Store
 CLAUDE.md
+tests/fixtures/*.md
+build-app.ico
