@@ -4,8 +4,6 @@ on:
   pull_request:
     paths: ["windows/**", "tests/**", ".github/workflows/windows.yml"]
   workflow_dispatch:
-  release:
-    types: [published]
 
 permissions:
   contents: write
@@ -36,8 +34,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          $tag = "${{ github.event.release.tag_name }}"
-          $version = if ($tag) { $tag.TrimStart("v") } else { "0.0.${{ github.run_number }}" }
+          $version = "0.0.${{ github.run_number }}"
           python -c "from PIL import Image; Image.open('windows/assets/app.png').save('build-app.ico', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (256, 256)])"
           python -m nuitka --onefile --assume-yes-for-downloads --enable-plugin=tk-inter `
             --include-package-data=magika `
@@ -83,13 +80,6 @@ jobs:
           "all fixtures converted"
 
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'release'
         with:
           name: DropToMD-exe
           path: build/DropToMD.exe
-
-      - name: Attach to release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" build/DropToMD.exe --clobber
