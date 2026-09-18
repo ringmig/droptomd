@@ -48,8 +48,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Bundled in the app (release zip only, not in this repo)
+## Bundled in the Mac app (release zip only, not in this repo)
 
 The app ships Python (PSF License) and markitdown (MIT, Microsoft) with its dependencies, all under permissive licenses (MIT, BSD, Apache 2.0, MPL 2.0 for certifi). Each package's license file is included inside the app under `Contents/Resources/python/lib/python3.12/site-packages/*.dist-info/`.
 
 SpeechRecognition bundles the unmodified `flac` command-line encoder, licensed GPL 2.0, as a separate program used only for audio transcription. Its license is included alongside it; the source is available at https://github.com/xiph/flac.
+
+## Bundled in the Windows exe (release only, not in this repo)
+
+`DropToMD.exe` compiles in Python (PSF License) with Tcl/Tk (BSD-style), markitdown (MIT, Microsoft) with the same dependencies as the Mac app, pywinrt (MIT), tkinterdnd2 (MIT) with tkdnd (BSD-style) and Pillow (MIT-CMU). Each project's license is in its repository, and the exact versions are pinned in `windows/requirements.txt`.
+
+The exe is compiled with [Nuitka](https://nuitka.net), which is AGPLv3 with a runtime exception (`LICENSE-RUNTIME.txt` in the Nuitka repository): the compiled program is not subject to the AGPL.
