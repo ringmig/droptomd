@@ -13,7 +13,7 @@ import mdconvert  # repo root, shared with the Mac app; the build puts it on PYT
 ASSETS = Path(__file__).parent / "assets"
 
 # Kept in step with markitdownTypes in main.swift. markitdown passes unknown files through as text,
-# so anything off this list is refused up front. md is left off: converting it would overwrite the source.
+# so anything off this list is refused up front.
 MARKITDOWN_TYPES = {"pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "epub", "ipynb", "msg", "zip",
                     "csv", "json", "xml", "rss", "atom", "txt", "yaml", "yml", "mp3", "wav", "m4a"}
 # Formats the Mac app sends through textutil. Word opens all of them; rtfd and webarchive have no Windows reader.
@@ -148,6 +148,8 @@ def ocr_pdf_pages(md: str, pdf: Path) -> str:
 
 def markdown_for(src: Path) -> bytes:
     ext = src.suffix.lower().lstrip(".")
+    if ext in {"md", "markdown"}:  # its output path would be the source itself, so converting would overwrite it
+        raise Unsupported("File is already markdown")
     if ext in IMAGE_TYPES:
         return ocr(src).encode("utf-8")
     if ext not in MARKITDOWN_TYPES | WORD_TYPES:
@@ -322,7 +324,7 @@ class Window:
         if last_error is None:
             self.updates.put(("done",))
         else:
-            self.updates.put(("failed", "File not supported" if isinstance(last_error, Unsupported) else "Conversion Failed"))
+            self.updates.put(("failed", str(last_error) if isinstance(last_error, Unsupported) else "Conversion Failed"))
 
     def poll(self):
         # tkinter is not thread-safe: the worker only queues, the Tk thread draws

@@ -56,7 +56,6 @@ let iworkTypes = ["pages": ("Pages", "Microsoft Word", "docx"),
                   "key": ("Keynote", "Microsoft PowerPoint", "pptx")]
 let imageTypes: Set = ["heic", "heif", "png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "webp"]
 // markitdown passes unknown files through as text, so anything off this list is refused up front.
-// md is left off on purpose: its output path is the source itself, so converting would overwrite it.
 let markitdownTypes: Set = ["pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "epub", "ipynb", "msg", "zip",
                             "csv", "json", "xml", "rss", "atom", "txt", "yaml", "yml", "mp3", "wav", "m4a"]
 
@@ -95,6 +94,8 @@ func ocrPages(_ md: String, pdf: URL) throws -> String {
 
 func markdown(for src: URL) throws -> Data {
     let ext = src.pathExtension.lowercased()
+    // its output path would be the source itself, so converting would overwrite it
+    if ["md", "markdown"].contains(ext) { throw fail("File is already markdown", code: unsupportedCode) }
     if imageTypes.contains(ext) { return try ocr(src) }
     guard markitdownTypes.contains(ext) || textutilTypes.contains(ext) || iworkTypes[ext] != nil
     else { throw fail("File not supported", code: unsupportedCode) }
@@ -181,7 +182,7 @@ struct DropView: View {
                 // ponytail: no reason shown on purpose; the headless mode prints it
                 let result: Status = switch lastError?.code {
                 case nil: .done
-                case unsupportedCode: .failed("File not supported")
+                case unsupportedCode: .failed(lastError?.localizedDescription ?? "File not supported")
                 default: .failed("Conversion Failed")
                 }
                 await MainActor.run { status = result }

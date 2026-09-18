@@ -37,7 +37,7 @@ jobs:
           echo "all fixtures converted"
           # #2: a dropped .md must stay untouched; the blank lines are what a conversion would collapse
           printf 'a\n\n\n\nb\n' > "$RUNNER_TEMP/keep.md" && cp "$RUNNER_TEMP/keep.md" "$RUNNER_TEMP/keep.orig"
-          "$app/Contents/MacOS/DropToMD" "$RUNNER_TEMP/keep.md"
+          "$app/Contents/MacOS/DropToMD" "$RUNNER_TEMP/keep.md" | grep -q "File is already markdown" || { echo "wrong message for a dropped .md"; exit 1; }
           cmp "$RUNNER_TEMP/keep.md" "$RUNNER_TEMP/keep.orig" || { echo "a dropped .md was overwritten"; exit 1; }
 
       - uses: actions/upload-artifact@v4
@@ -120,7 +120,8 @@ jobs:
           # #2: a dropped .md must stay untouched; the blank lines are what a conversion would collapse
           Set-Content keep.md "a`n`n`n`nb" -NoNewline
           $before = (Get-FileHash keep.md).Hash
-          Start-Process $exe -ArgumentList "`"$((Resolve-Path keep.md).Path)`"" -Wait -NoNewWindow
+          Start-Process $exe -ArgumentList "`"$((Resolve-Path keep.md).Path)`"" -Wait -NoNewWindow -RedirectStandardOutput keep.txt
+          if (-not (Select-String -Path keep.txt -Pattern "File is already markdown" -Quiet)) { "wrong message for a dropped .md"; exit 1 }
           if ((Get-FileHash keep.md).Hash -ne $before) { "a dropped .md was overwritten"; exit 1 }
 
       - uses: actions/upload-artifact@v4
