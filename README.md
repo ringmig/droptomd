@@ -35,25 +35,32 @@ Mac only: Pages, Numbers and Keynote (needs the app installed and permission gra
 
 Needs Xcode command line tools and [uv](https://github.com/astral-sh/uv). Produces `~/Applications/Drop to MD.app` and `dist/DropToMD.zip`.
 
-The Windows exe is built from `windows/droptomd.py` with Nuitka, on a Windows machine:
+The Windows exe is built from `windows/droptomd.py` with Nuitka, on a Windows machine, from the repo root (`mdconvert.py` there is shared with the Mac app):
 
 ```pwsh
 python -m pip install -r windows/requirements.txt nuitka[onefile]==4.2.1
+$env:PYTHONPATH = $PWD.Path
 python -m nuitka --onefile --enable-plugin=tk-inter --include-package=winrt `
-  --include-package-data=magika --include-package-data=tkinterdnd2 --include-package-data=speech_recognition `
+  --include-package-data=magika --include-package-data=pdfminer --include-package-data=tkinterdnd2 `
+  --include-package-data=speech_recognition `
   --include-data-dir=windows/assets=assets --output-dir=build --output-filename=DropToMD.exe windows/droptomd.py
 ```
 
 `DropToMD.exe --check` prints what the machine can do; passing file paths converts them without opening the window.
 
+## Release
+
+Push a tag, `git tag vX.Y.Z && git push origin vX.Y.Z`. GitHub Actions builds and tests both apps and puts `DropToMD.zip` and `DropToMD.exe` in one draft release; write the notes and publish it. The Windows build takes about 45 minutes when its cache is cold.
+
 ## Built on
 
 - [microsoft/markitdown](https://github.com/microsoft/markitdown): the conversion engine for most formats
+- [pdfminer.six](https://github.com/pdfminer/pdfminer.six): PDF layout, from which font size gives the headings
 - [python-build-standalone](https://github.com/astral-sh/python-build-standalone), installed through uv: the relocatable Python bundled in the app
-- Apple Vision: on-device text recognition for images on the Mac
+- Apple Vision: on-device text recognition for images and scanned PDF pages on the Mac
 - Apple `textutil`: RTF, DOC, ODT and webarchive to HTML before markitdown on the Mac
 - Microsoft Word: the same formats on Windows, which has no built-in converter
-- Windows.Media.Ocr: on-device text recognition for images on Windows
+- Windows.Media.Ocr and Windows.Data.Pdf: on-device text recognition for images and scanned PDF pages on Windows
 - [Nuitka](https://nuitka.net): compiles the Windows version into a single exe
 - [tkinterdnd2](https://github.com/pmgagne/tkinterdnd2): file drops on the Windows window
 - Pages, Numbers and Keynote: iWork files are exported to Office formats through their own app

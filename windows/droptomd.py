@@ -1,11 +1,14 @@
 """Drop to MD for Windows. `DropToMD.exe file...` converts without the window; `--check` smoke-tests the bundle."""
 import os
 import queue
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 from pathlib import Path
+
+import mdconvert  # repo root, shared with the Mac app; the build puts it on PYTHONPATH
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -37,9 +40,6 @@ class Unsupported(Exception):
     pass
 
 
-_markitdown = None
-
-
 def has_word() -> bool:
     import winreg
 
@@ -67,13 +67,27 @@ def ocr_engine():
     return OcrEngine.try_create_from_user_profile_languages()
 
 
-def ocr(src: Path) -> str:
-    """Image text via Windows.Media.Ocr, the on-device OCR built into Windows 10 and 11."""
-    import asyncio
-
+async def recognize_stream(engine, stream) -> list[str]:
+    """Text lines in an encoded image stream, via Windows.Media.Ocr, the on-device OCR built into Windows 10 and 11."""
     from winrt.windows.graphics.imaging import (BitmapAlphaMode, BitmapDecoder, BitmapPixelFormat, BitmapTransform,
                                                 ColorManagementMode, ExifOrientationMode)
     from winrt.windows.media.ocr import OcrEngine
+
+    decoder = await BitmapDecoder.create_async(stream)
+    # OCR refuses images above max_image_dimension, so large photos are scaled down first
+    scale = min(1, OcrEngine.max_image_dimension / max(decoder.pixel_width, decoder.pixel_height))
+    transform = BitmapTransform()
+    transform.scaled_width = int(decoder.pixel_width * scale)
+    transform.scaled_height = int(decoder.pixel_height * scale)
+    bitmap = await decoder.get_software_bitmap_transformed_async(
+        BitmapPixelFormat.BGRA8, BitmapAlphaMode.PREMULTIPLIED, transform,
+        ExifOrientationMode.RESPECT_EXIF_ORIENTATION, ColorManagementMode.DO_NOT_COLOR_MANAGE)
+    return [line.text for line in (await engine.recognize_async(bitmap)).lines]
+
+
+def ocr(src: Path) -> str:
+    import asyncio
+
     from winrt.windows.storage import FileAccessMode, StorageFile
 
     async def recognize() -> list[str]:
@@ -82,18 +96,9 @@ def ocr(src: Path) -> str:
             raise RuntimeError("No text recognition language installed")
         try:
             file = await StorageFile.get_file_from_path_async(str(src))
-            decoder = await BitmapDecoder.create_async(await file.open_async(FileAccessMode.READ))
+            return await recognize_stream(engine, await file.open_async(FileAccessMode.READ))
         except OSError:
             raise RuntimeError("Could not read image") from None
-        # OCR refuses images above max_image_dimension, so large photos are scaled down first
-        scale = min(1, OcrEngine.max_image_dimension / max(decoder.pixel_width, decoder.pixel_height))
-        transform = BitmapTransform()
-        transform.scaled_width = int(decoder.pixel_width * scale)
-        transform.scaled_height = int(decoder.pixel_height * scale)
-        bitmap = await decoder.get_software_bitmap_transformed_async(
-            BitmapPixelFormat.BGRA8, BitmapAlphaMode.PREMULTIPLIED, transform,
-            ExifOrientationMode.RESPECT_EXIF_ORIENTATION, ColorManagementMode.DO_NOT_COLOR_MANAGE)
-        return [line.text for line in (await engine.recognize_async(bitmap)).lines]
 
     lines = asyncio.run(recognize())
     if not lines:
@@ -101,8 +106,47 @@ def ocr(src: Path) -> str:
     return "\n".join(lines)
 
 
+OCR_MARK = re.compile(r"<!-- ocr-page (\d+) -->")
+
+
+def ocr_pdf_pages(md: str, pdf: Path) -> str:
+    """Fills the `<!-- ocr-page N -->` marks mdconvert leaves where a page's text is only pixels or outlines.
+    Same as ocrPages in main.swift: the page rendered 1600 px on its long side, then OCR."""
+    import asyncio
+
+    pages = {int(n) for n in OCR_MARK.findall(md)}
+    if not pages:
+        return md
+
+    async def recognize() -> dict[int, str]:
+        from winrt.windows.data.pdf import PdfDocument, PdfPageRenderOptions
+        from winrt.windows.storage import StorageFile
+        from winrt.windows.storage.streams import InMemoryRandomAccessStream
+
+        engine = ocr_engine()
+        if engine is None:  # no OCR language: those pages stay empty rather than failing the whole file
+            return {}
+        doc = await PdfDocument.load_from_file_async(await StorageFile.get_file_from_path_async(str(pdf)))
+        texts = {}
+        for n in sorted(pages):
+            page = doc.get_page(n - 1)
+            options = PdfPageRenderOptions()
+            if page.size.width >= page.size.height:
+                options.destination_width = 1600
+            else:
+                options.destination_height = 1600
+            stream = InMemoryRandomAccessStream()
+            await page.render_to_stream_async(stream, options)
+            stream.seek(0)  # rendering leaves the position at the end
+            texts[n] = "\n".join(await recognize_stream(engine, stream))
+        return texts
+
+    texts = asyncio.run(recognize())
+    md = OCR_MARK.sub(lambda m: texts.get(int(m[1]), ""), md)
+    return re.sub(r"\n{3,}", "\n\n", md)  # a page with no text found leaves blank lines behind
+
+
 def markdown_for(src: Path) -> bytes:
-    global _markitdown
     ext = src.suffix.lower().lstrip(".")
     if ext in IMAGE_TYPES:
         return ocr(src).encode("utf-8")
@@ -113,11 +157,9 @@ def markdown_for(src: Path) -> bytes:
         if ext in WORD_TYPES:
             source = Path(tmp) / "doc.docx"
             word_to_docx(src, source)
-        if _markitdown is None:
-            from markitdown import MarkItDown  # imports pandas and magika, seconds on first use
-
-            _markitdown = MarkItDown()
-        md = _markitdown.convert(str(source)).markdown
+        md = mdconvert.convert(source)  # the first call imports markitdown, pandas and magika: seconds
+        if ext == "pdf":
+            md = ocr_pdf_pages(md, source)
     # markitdown returns nothing on some broken files; an empty .md is a failure, not a success
     if not md.strip():
         raise ValueError("Empty result")

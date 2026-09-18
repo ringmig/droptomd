@@ -1,15 +1,47 @@
-name: Windows exe
+name: Build
 
+# A pushed v* tag builds both apps and puts them in one draft release; the notes are written by hand before publishing.
 on:
+  push:
+    tags: ["v*"]
   pull_request:
-    paths: ["windows/**", "tests/**", ".github/workflows/windows.yml"]
+    paths: ["windows/**", "tests/**", "main.swift", "icon.swift", "build.sh", "mdconvert.py", ".github/workflows/build.yml"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Test
+        env:
+          LC_ALL: en_US.UTF-8 # so the wildcard below matches å, ä and ö as one character
+        run: |
+          app=~/Applications/"Drop to MD.app"
+          "$app/Contents/Resources/python/bin/python3" tests/test_mdconvert.py
+          "$app/Contents/MacOS/DropToMD" tests/fixtures/*
+          for f in tests/fixtures/*; do
+            # every fixture carries Swedish text; OCR may swap a diacritic, so those letters are wildcards
+            grep -qE "R.ksm.rg.s|G.teborg" "${f%.*}.md" || { echo "bad output for $f"; exit 1; }
+          done
+          echo "all fixtures converted"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DropToMD-zip
+          path: dist/DropToMD.zip
+
+  windows:
     runs-on: windows-latest
     timeout-minutes: 180
     env:
@@ -34,10 +66,13 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          $version = "0.0.${{ github.run_number }}"
+          # the exe's version resource takes numbers only, so v1.2.0-rc1 becomes 1.2.0
+          $version = if ("${{ github.ref_type }}" -eq "tag") { ("${{ github.ref_name }}".TrimStart("v") -split "-")[0] } else { "0.0.${{ github.run_number }}" }
+          $env:PYTHONPATH = $PWD.Path # mdconvert.py sits in the repo root, shared with the Mac app
           python -c "from PIL import Image; Image.open('windows/assets/app.png').save('build-app.ico', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (256, 256)])"
           python -m nuitka --onefile --assume-yes-for-downloads --enable-plugin=tk-inter `
             --include-package-data=magika `
+            --include-package-data=pdfminer `
             --include-package-data=tkinterdnd2 `
             --include-package=winrt `
             --include-package-data=speech_recognition `
@@ -66,7 +101,7 @@ jobs:
           $check = Get-Content check.txt
           $fixtures = Get-ChildItem tests/fixtures -File
           # the runner may lack an OCR language or Word; those fixtures are skipped loudly, never silently
-          if ($check -contains "ocr none") { "SKIP png.png: no OCR language on this machine"; $fixtures = $fixtures | Where-Object Extension -ne ".png" }
+          if ($check -contains "ocr none") { "SKIP png.png, scan.pdf: no OCR language on this machine"; $fixtures = $fixtures | Where-Object { $_.Extension -ne ".png" -and $_.Name -ne "scan.pdf" } }
           if ($check -contains "word no") { "SKIP rtf.rtf: Word is not installed"; $fixtures = $fixtures | Where-Object Extension -ne ".rtf" }
           $p = Start-Process $exe -ArgumentList ($fixtures | ForEach-Object { "`"$($_.FullName)`"" }) -Wait -PassThru -NoNewWindow -RedirectStandardOutput out.txt -RedirectStandardError err.txt
           Get-Content out.txt, err.txt -Encoding utf8
@@ -83,3 +118,22 @@ jobs:
         with:
           name: DropToMD-exe
           path: build/DropToMD.exe
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Both builds into one draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" > /dev/null 2>&1 ||
+            gh release create "$TAG" --draft --verify-tag --title "Drop to MD ${TAG#v}" --notes "Notes to come."
+          gh release upload "$TAG" DropToMD.zip DropToMD.exe --clobber

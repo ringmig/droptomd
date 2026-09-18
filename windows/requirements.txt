@@ -1,6 +1,7 @@
 markitdown[pdf,docx,pptx,xlsx,xls,outlook,audio-transcription]==0.1.7
 tkinterdnd2==0.6.3
 winrt-runtime==3.2.1
+winrt-Windows.Data.Pdf==3.2.1
 winrt-Windows.Foundation==3.2.1
 winrt-Windows.Foundation.Collections==3.2.1
 winrt-Windows.Globalization==3.2.1
