@@ -136,7 +136,7 @@ def ocr_pdf_pages(md: str, pdf: Path) -> str:
             else:
                 options.destination_height = 1600
             stream = InMemoryRandomAccessStream()
-            await page.render_to_stream_async(stream, options)
+            await page.render_with_options_to_stream_async(stream, options)  # pywinrt names each overload
             stream.seek(0)  # rendering leaves the position at the end
             texts[n] = "\n".join(await recognize_stream(engine, stream))
         return texts
