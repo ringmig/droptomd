@@ -1,9 +1,11 @@
 import SwiftUI
 import AppKit
 import Vision
+import PDFKit
 
 // markitdown runs on a standalone Python bundled inside the app, so nothing needs installing
 let python = Bundle.main.resourcePath! + "/python/bin/python3"
+let script = Bundle.main.resourcePath! + "/mdconvert.py"
 
 func lucide(_ paths: String, stroke: String = "white") -> NSImage {
     let svg = """
@@ -55,23 +57,45 @@ let iworkTypes = ["pages": ("Pages", "Microsoft Word", "docx"),
 let imageTypes: Set = ["heic", "heif", "png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "webp"]
 // markitdown passes unknown files through as text, so anything off this list is refused up front.
 let markitdownTypes: Set = ["pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "epub", "ipynb", "msg", "zip",
-                            "csv", "json", "xml", "rss", "atom", "txt", "md", "yaml", "yml", "mp3", "wav", "m4a"]
+                            "csv", "json", "xml", "rss", "atom", "txt", "yaml", "yml", "mp3", "wav", "m4a"]
 
-/// Image text via Vision, the same on-device OCR as Live Text.
-func ocr(_ src: URL) throws -> Data {
-    guard let source = CGImageSourceCreateWithURL(src as CFURL, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw fail("Could not read image") }
+/// Text in an image via Vision, the same on-device OCR as Live Text.
+// ponytail: no headings from OCR; line height mixes rotated margin text and photo text in with titles
+func recognizeText(_ image: CGImage) throws -> String {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.automaticallyDetectsLanguage = true
     try VNImageRequestHandler(cgImage: image).perform([request])
-    let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
-    guard !lines.isEmpty else { throw fail("No text found in image") }
-    return Data(lines.joined(separator: "\n").utf8)
+    return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+}
+
+func ocr(_ src: URL) throws -> Data {
+    guard let source = CGImageSourceCreateWithURL(src as CFURL, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw fail("Could not read image") }
+    let text = try recognizeText(image)
+    guard !text.isEmpty else { throw fail("No text found in image") }
+    return Data(text.utf8)
+}
+
+/// Fills the `<!-- ocr-page N -->` marks mdconvert.py leaves where a PDF page's text is only pixels or outlines.
+func ocrPages(_ md: String, pdf: URL) throws -> String {
+    guard md.contains("<!-- ocr-page"), let doc = PDFDocument(url: pdf) else { return md }
+    var out = md
+    for match in md.matches(of: #/<!-- ocr-page (\d+) -->/#) {
+        guard let page = doc.page(at: Int(match.1)! - 1) else { continue }
+        let box = page.bounds(for: .mediaBox)
+        let scale = 1600 / max(box.width, box.height)
+        let image = page.thumbnail(of: CGSize(width: box.width * scale, height: box.height * scale), for: .mediaBox)
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
+        out = out.replacingOccurrences(of: String(match.0), with: try recognizeText(cg))
+    }
+    return out.replacing(#/\n{3,}/#, with: "\n\n") // a page with no text found leaves blank lines behind
 }
 
 func markdown(for src: URL) throws -> Data {
     let ext = src.pathExtension.lowercased()
+    // its output path would be the source itself, so converting would overwrite it
+    if ["md", "markdown"].contains(ext) { throw fail("File is already markdown", code: unsupportedCode) }
     if imageTypes.contains(ext) { return try ocr(src) }
     guard markitdownTypes.contains(ext) || textutilTypes.contains(ext) || iworkTypes[ext] != nil
     else { throw fail("File not supported", code: unsupportedCode) }
@@ -98,10 +122,11 @@ func markdown(for src: URL) throws -> Data {
             end run
             """, src.path, input.path])
     }
-    let md = try run(python, ["-m", "markitdown", input.path])
+    var md = String(decoding: try run(python, [script, input.path]), as: UTF8.self)
+    if ext == "pdf" { md = try ocrPages(md, pdf: input) }
     // markitdown exits 0 with nothing on a broken file; an empty .md is a failure, not a success
-    guard !String(decoding: md, as: UTF8.self).allSatisfy(\.isWhitespace) else { throw fail("Empty result") }
-    return md
+    guard !md.allSatisfy(\.isWhitespace) else { throw fail("Empty result") }
+    return Data(md.utf8)
 }
 
 /// Converts `src` and writes `<name>.md` next to it, or in ~/Downloads if that folder isn't writable.
@@ -157,7 +182,7 @@ struct DropView: View {
                 // ponytail: no reason shown on purpose; the headless mode prints it
                 let result: Status = switch lastError?.code {
                 case nil: .done
-                case unsupportedCode: .failed("File not supported")
+                case unsupportedCode: .failed(lastError?.localizedDescription ?? "File not supported")
                 default: .failed("Conversion Failed")
                 }
                 await MainActor.run { status = result }
