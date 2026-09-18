@@ -3,20 +3,24 @@
 set -e
 cd "${0:A:h}"
 
-# Standalone Python with markitdown[all], built once and cached in build/. Delete build/ to refresh.
-if [[ ! -x build/python/bin/python3 ]]; then
+# Standalone Python with markitdown, cached outside the repo: Box offloads a synced cache and the build hangs on it.
+# Delete the cache folder to start over. [all] would pull a pre-release Azure package the app never calls.
+PY=~/Library/Caches/droptomd/python
+if [[ ! -x $PY/bin/python3 ]]; then
   uv python install 3.12 --managed-python
-  rm -rf build && mkdir build
-  cp -R "$(dirname "$(dirname "$(realpath "$(uv python find 3.12 --managed-python)")")")" build/python
-  uv pip install --python build/python/bin/python3 --break-system-packages 'markitdown[all]'
+  mkdir -p ${PY:h}
+  cp -R "$(dirname "$(dirname "$(realpath "$(uv python find 3.12 --managed-python)")")")" $PY
 fi
+uv pip install -q --python $PY/bin/python3 --break-system-packages \
+  'markitdown[docx,outlook,pdf,pptx,xls,xlsx,audio-transcription]==0.1.7'
 
 APP=~/Applications/"Drop to MD.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -O -o "$APP/Contents/MacOS/DropToMD" main.swift
 swift icon.swift && iconutil -c icns AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns" && rm -rf AppIcon.iconset
-cp -R build/python "$APP/Contents/Resources/python"
+cp -R $PY "$APP/Contents/Resources/python"
+cp mdconvert.py "$APP/Contents/Resources/"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
