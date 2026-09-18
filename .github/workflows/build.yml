@@ -1,9 +1,12 @@
 name: Build
 
 # A pushed v* tag builds both apps and puts them in one draft release; the notes are written by hand before publishing.
+# Pushes to main build too: a tag run can only restore main's cache, not a PR's, and a cold Windows build is ~45 min.
 on:
   push:
     tags: ["v*"]
+    branches: [main]
+    paths: ["windows/**", "tests/**", "main.swift", "icon.swift", "build.sh", "mdconvert.py", ".github/workflows/build.yml"]
   pull_request:
     paths: ["windows/**", "tests/**", "main.swift", "icon.swift", "build.sh", "mdconvert.py", ".github/workflows/build.yml"]
   workflow_dispatch:
