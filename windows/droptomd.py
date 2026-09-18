@@ -13,9 +13,9 @@ import mdconvert  # repo root, shared with the Mac app; the build puts it on PYT
 ASSETS = Path(__file__).parent / "assets"
 
 # Kept in step with markitdownTypes in main.swift. markitdown passes unknown files through as text,
-# so anything off this list is refused up front.
+# so anything off this list is refused up front. md is left off: converting it would overwrite the source.
 MARKITDOWN_TYPES = {"pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "epub", "ipynb", "msg", "zip",
-                    "csv", "json", "xml", "rss", "atom", "txt", "md", "yaml", "yml", "mp3", "wav", "m4a"}
+                    "csv", "json", "xml", "rss", "atom", "txt", "yaml", "yml", "mp3", "wav", "m4a"}
 # Formats the Mac app sends through textutil. Word opens all of them; rtfd and webarchive have no Windows reader.
 WORD_TYPES = {"rtf", "doc", "odt", "wordml"}
 IMAGE_TYPES = {"heic", "heif", "png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "webp"}

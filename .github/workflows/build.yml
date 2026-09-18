@@ -35,6 +35,10 @@ jobs:
             grep -qE "R.ksm.rg.s|G.teborg" "${f%.*}.md" || { echo "bad output for $f"; exit 1; }
           done
           echo "all fixtures converted"
+          # #2: a dropped .md must stay untouched; the blank lines are what a conversion would collapse
+          printf 'a\n\n\n\nb\n' > "$RUNNER_TEMP/keep.md" && cp "$RUNNER_TEMP/keep.md" "$RUNNER_TEMP/keep.orig"
+          "$app/Contents/MacOS/DropToMD" "$RUNNER_TEMP/keep.md"
+          cmp "$RUNNER_TEMP/keep.md" "$RUNNER_TEMP/keep.orig" || { echo "a dropped .md was overwritten"; exit 1; }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -113,6 +117,11 @@ jobs:
             if ($text -notmatch "R.ksm.rg.s|G.teborg") { "bad output for $($f.Name)"; exit 1 }
           }
           "all fixtures converted"
+          # #2: a dropped .md must stay untouched; the blank lines are what a conversion would collapse
+          Set-Content keep.md "a`n`n`n`nb" -NoNewline
+          $before = (Get-FileHash keep.md).Hash
+          Start-Process $exe -ArgumentList "`"$((Resolve-Path keep.md).Path)`"" -Wait -NoNewWindow
+          if ((Get-FileHash keep.md).Hash -ne $before) { "a dropped .md was overwritten"; exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:

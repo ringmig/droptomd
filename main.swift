@@ -56,8 +56,9 @@ let iworkTypes = ["pages": ("Pages", "Microsoft Word", "docx"),
                   "key": ("Keynote", "Microsoft PowerPoint", "pptx")]
 let imageTypes: Set = ["heic", "heif", "png", "jpg", "jpeg", "tiff", "tif", "gif", "bmp", "webp"]
 // markitdown passes unknown files through as text, so anything off this list is refused up front.
+// md is left off on purpose: its output path is the source itself, so converting would overwrite it.
 let markitdownTypes: Set = ["pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "epub", "ipynb", "msg", "zip",
-                            "csv", "json", "xml", "rss", "atom", "txt", "md", "yaml", "yml", "mp3", "wav", "m4a"]
+                            "csv", "json", "xml", "rss", "atom", "txt", "yaml", "yml", "mp3", "wav", "m4a"]
 
 /// Text in an image via Vision, the same on-device OCR as Live Text.
 // ponytail: no headings from OCR; line height mixes rotated margin text and photo text in with titles
